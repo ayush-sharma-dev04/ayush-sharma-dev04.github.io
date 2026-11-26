@@ -1,0 +1,49 @@
+/* -------------------------------------------------------------------------
+   Spider-Man preview
+   Every layer that hosts the simulation is transparent. The only painted
+   surface is .preview-backdrop, used so this standalone page is readable.
+   ------------------------------------------------------------------------- */
+
+html,
+body {
+  background: transparent;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.preview-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 60% 55% at 72% 18%, rgba(180, 87, 75, 0.12), transparent 65%),
+    radial-gradient(ellipse 80% 70% at 50% 110%, rgba(38, 34, 31, 0.9), transparent 70%),
+    #12100e;
+}
+
+#canvas-container {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  background: transparent;
+}
+
+#canvas-container canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+}

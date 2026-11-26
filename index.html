@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta
+    name="description"
+    content="Ayush Sharma — computer science student exploring AI, computer vision and machine learning by building things that run."
+  />
+  <title>Ayush Sharma — Software &amp; AI</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,400;0,6..12,600;0,6..12,700;1,6..12,400&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="./style.css" />
+  <script>
+    document.documentElement.classList.add('js');
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js" defer></script>
+</head>
+<body>
+
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <!-- ============================== HEADER ============================== -->
+  <header class="site-header">
+    <nav class="navbar" aria-label="Primary navigation">
+      <a class="brand" href="#home">
+        <span class="brand-name">Ayush Sharma</span>
+      </a>
+
+      <div class="nav-links">
+        <a href="#home" aria-current="page">Home</a>
+        <a href="#about">About</a>
+        <a href="#journey">Journey</a>
+        <a href="#projects">Projects</a>
+        <a href="#achievements">Achievements</a>
+      </div>
+
+      <div class="nav-social">
+        <a
+          class="icon-link"
+          href="https://github.com/ayush-sharma-dev04"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Ayush Sharma on GitHub"
+          title="GitHub"
+        >
+          <span class="icon icon-github" aria-hidden="true"></span>
+        </a>
+        <a
+          class="icon-link"
+          href="https://www.linkedin.com/in/ayush-sharma-960712439/"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Ayush Sharma on LinkedIn"
+          title="LinkedIn"
+        >
+          <span class="icon icon-linkedin" aria-hidden="true"></span>
+        </a>
+        <a
+          class="icon-link"
+          href="mailto:ayush04.sharma.codes@gmail.com"
+          aria-label="Email Ayush Sharma"
+          title="Email"
+        >
+          <span class="icon icon-email" aria-hidden="true"></span>
+        </a>
+      </div>
+    </nav>
+  </header>
+
+  <!-- Game Mode launcher: deliberately outside the header/navbar so it does not
+       inherit the navbar's layout, borders or background. Positioned directly
+       below the navbar and aligned to the left. -->
+  <div class="game-launch">
+    <button
+      id="game-mode-toggle"
+      class="game-toggle"
+      type="button"
+      aria-expanded="false"
+      aria-controls="portfolio-game-drawer"
+      aria-label="Toggle Web Rush"
+      title="Open Web Rush"
+    >
+      <span class="icon icon-game" aria-hidden="true"></span>
+    </button>
+
+    <button
+      id="game-info-toggle"
+      class="game-info-toggle"
+      type="button"
+      aria-expanded="false"
+      aria-controls="game-controls-panel"
+      aria-label="Show Web Rush controls"
+      title="Web Rush controls"
+    >
+      <span aria-hidden="true">i</span>
+    </button>
+
+    <div
+      id="game-controls-panel"
+      class="game-controls-panel"
+      role="dialog"
+      aria-label="Web Rush controls"
+      hidden
+    >
+      <p class="game-controls-title">Web Rush controls</p>
+      <dl class="game-controls-list">
+        <div class="game-control-row">
+          <dt><kbd>A</kbd> / <kbd>←</kbd></dt>
+          <dd>Move left</dd>
+        </div>
+        <div class="game-control-row">
+          <dt><kbd>D</kbd> / <kbd>→</kbd></dt>
+          <dd>Move right</dd>
+        </div>
+        <div class="game-control-row">
+          <dt><kbd>Space</kbd></dt>
+          <dd>Shoot / start mission</dd>
+        </div>
+        <div class="game-control-row">
+          <dt><kbd>Esc</kbd></dt>
+          <dd>Pause / resume or close</dd>
+        </div>
+        <div class="game-control-row">
+          <dt>Touch</dt>
+          <dd>Use the on-screen arrows and FIRE</dd>
+        </div>
+      </dl>
+    </div>
+  </div>
+
+  <!-- ============================ GAME MODE ============================ -->
+  <div
+    id="portfolio-game-drawer"
+    class="game-drawer"
+    role="region"
+    aria-label="Game Mode"
+    aria-hidden="true"
+    inert
+  >
+    <div class="game-drawer-inner">
+      <div id="shooter-stage" class="shooter-stage">
+        <canvas
+          id="shooter-canvas"
+          class="shooter-canvas"
+          tabindex="-1"
+          aria-label="Web Rush game canvas"
+        ></canvas>
+
+        <div class="shooter-hud">
+          <div class="hud-group">
+            <div class="hud-stat">SCORE <span id="hud-score" class="val">0000</span></div>
+            <div class="hud-stat">BEST <span id="hud-best" class="val">0000</span></div>
+            <div class="hud-stat accent">WAVE <span id="hud-wave" class="val">01</span></div>
+          </div>
+
+          <div class="hud-group">
+            <div id="hud-lives" class="hud-lives" aria-label="Lives remaining"></div>
+            <button id="btn-sfx" class="hud-btn" type="button" aria-pressed="true" title="Mute sound effects">SFX: ON</button>
+            <button id="btn-music" class="hud-btn" type="button" aria-pressed="true" title="Mute music">MUSIC: ON</button>
+            <button id="btn-pause" class="hud-btn" type="button" title="Pause (Esc)">PAUSE</button>
+            <button
+              id="btn-restart-hud"
+              class="hud-btn hud-btn-icon"
+              type="button"
+              aria-label="Restart game"
+              title="Restart game"
+            >
+              <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false">
+                <path d="M13.5 8a5.5 5.5 0 1 1-1.9-4.16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                <path d="M13.5 1.5v3.4H10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div id="hud-powerups" class="hud-powerups"></div>
+
+        <div id="overlay-start" class="shooter-overlay">
+          <div class="overlay-kicker">// ARCADE SUBSYSTEM</div>
+          <div class="overlay-title">WEB RUSH</div>
+          <div class="overlay-actions">
+            <button id="btn-start" class="btn-arcade-primary" type="button">START MISSION</button>
+          </div>
+        </div>
+
+        <div id="overlay-pause" class="shooter-overlay hidden">
+          <div class="overlay-kicker">// SYSTEM PAUSED</div>
+          <div class="overlay-title">MISSION ON HOLD</div>
+          <div class="overlay-actions">
+            <button id="btn-resume" class="btn-arcade-primary" type="button">RESUME</button>
+            <button id="btn-exit-pause" class="btn-arcade-secondary" type="button">CLOSE ARCADE</button>
+          </div>
+        </div>
+
+        <div id="overlay-gameover" class="shooter-overlay hidden">
+          <div class="overlay-kicker">// HULL BREACHED</div>
+          <div class="overlay-title">GAME OVER</div>
+          <div class="overlay-stats">
+            <div>SCORE <strong id="final-score">0</strong></div>
+            <div>WAVE <strong id="final-wave">1</strong></div>
+            <div>BEST <strong id="final-best">0</strong></div>
+          </div>
+          <div class="overlay-actions">
+            <button id="btn-restart" class="btn-arcade-primary" type="button">PLAY AGAIN</button>
+            <button id="btn-exit-over" class="btn-arcade-secondary" type="button">EXIT</button>
+          </div>
+        </div>
+
+        <div id="touch-controls" class="touch-controls">
+          <div class="touch-dpad">
+            <button id="touch-left" class="touch-btn" type="button" aria-label="Move left">◀</button>
+            <button id="touch-right" class="touch-btn" type="button" aria-label="Move right">▶</button>
+          </div>
+          <button id="touch-fire" class="touch-btn fire-btn" type="button" aria-label="Fire">FIRE</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <main id="main">
+
+    <!-- ============================== HERO ============================== -->
+    <section id="home" class="hero" aria-labelledby="hero-heading">
+      <div class="hero-content">
+        <h1 class="hero-heading" id="hero-heading">
+          Hello, Ayush Sharma<span class="cursor" aria-hidden="true"></span>
+        </h1>
+
+        <p class="hero-lead">
+          I build things with machine learning, computer vision and AI. I enjoy
+          turning curious ideas into working projects, trying out new tools, and
+          occasionally finding a much harder problem than I expected.
+        </p>
+
+        <a class="hero-cta" href="mailto:ayush04.sharma.codes@gmail.com">
+          <span class="icon icon-email" aria-hidden="true"></span>
+          <span class="hero-cta-text">Drop me a line</span>
+          <span class="hero-cta-arrow" aria-hidden="true">↗</span>
+        </a>
+      </div>
+
+      <!-- Transparent floating stage: the p5 canvas is drawn here. -->
+      <div id="canvas-container" class="spider-stage" aria-hidden="true"></div>
+    </section>
+
+    <!-- ============================= ABOUT ============================== -->
+    <section id="about" class="section about" aria-labelledby="about-heading">
+      <header class="section-head">
+        <p class="section-path"><span>portfolio</span><span class="sep">/</span></p>
+        <h2 class="section-folder" id="about-heading">about<span class="slash">/</span></h2>
+        <p class="section-sub reveal-lines">A little about me</p>
+      </header>
+
+      <div class="about-body">
+        <figure class="about-photo">
+          <img
+            src="./assets/images/about/profile_pic.jpeg"
+            width="1084"
+            height="1224"
+            alt="Ayush Sharma, wearing a dark cap, photographed against a sunlit wall"
+            loading="lazy"
+            decoding="async"
+          />
+          <figcaption class="about-photo-caption">
+            <span class="file-tab">ayush.jpeg</span>
+          </figcaption>
+        </figure>
+
+        <div class="about-copy">
+          <p class="about-lead">
+            I’m Ayush — a Computer Science student at
+            <a class="link" href="https://gcuniversity.ac.in/" target="_blank" rel="noopener noreferrer">Girijananda Chowdhury University</a>,
+            Guwahati, originally from Dimapur, Nagaland.
+          </p>
+          <p>
+            I’m not a working engineer; I’m someone who learns by building. Most of
+            my curiosity lands in technology, AI and computer vision, and the best
+            way I’ve found to understand any of it is to make a small, working
+            version and see where it breaks.
+          </p>
+          <p>
+            That usually means pose-tracking experiments, a food-recognition model
+            trained on too few images, or a RAG chain I keep rewriting. I like the
+            part where an idea stops being a note and starts running.
+          </p>
+
+          <ul class="interest-list" aria-label="Technical interests">
+            <li>Computer vision</li>
+            <li>Machine learning</li>
+            <li>AI agents</li>
+            <li>LLMs &amp; RAG</li>
+            <li>Python</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ JOURNEY ============================= -->
+    <section id="journey" class="section journey" aria-labelledby="journey-heading">
+      <header class="section-head">
+        <p class="section-path"><span>portfolio</span><span class="sep">/</span></p>
+        <h2 class="section-folder" id="journey-heading">journey<span class="slash">/</span></h2>
+        <p class="section-sub reveal-lines">Education &amp; experience</p>
+      </header>
+
+      <div class="journey-grid">
+        <article class="journey-card fade-in" tabindex="0">
+          <p class="file-tab">education</p>
+          <p class="journey-step">01</p>
+          <h3>B.Tech in Computer Science and Engineering</h3>
+          <p>
+            <a class="link" href="https://gcuniversity.ac.in/" target="_blank" rel="noopener noreferrer">Girijananda Chowdhury University</a>,
+            Guwahati.
+          </p>
+        </article>
+
+        <article class="journey-card fade-in" tabindex="0">
+          <p class="file-tab">internship</p>
+          <p class="journey-step">02</p>
+          <h3>Machine Learning using Python</h3>
+          <p>
+            <a class="link" href="https://www.epitomegroup.in/" target="_blank" rel="noopener noreferrer">Epitome</a>
+            — Institute for Vocational &amp; Professional Studies. A 120-hour
+            summer programme, July 2026.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <!-- ============================ PROJECTS ============================ -->
+    <section id="projects" class="section projects" aria-labelledby="projects-heading">
+      <header class="section-head">
+        <p class="section-path"><span>portfolio</span><span class="sep">/</span></p>
+        <h2 class="section-folder" id="projects-heading">projects<span class="slash">/</span></h2>
+        <p class="section-sub reveal-lines">Selected work</p>
+      </header>
+
+      <ul class="tree-list" aria-hidden="true">
+        <li class="tree-item">
+          <span class="tree-folder">ojas/</span>
+        </li>
+        <li class="tree-item">
+          <span class="tree-folder">codeais/</span>
+          <span class="tree-branch">└─</span>
+          <span class="tree-leaf">engano/</span>
+        </li>
+        <li class="tree-item">
+          <span class="tree-folder">rag-learning/</span>
+        </li>
+      </ul>
+
+      <div class="project-stack">
+
+        <!-- OJAS: exercise analysis + nutrition estimation, one project -->
+        <article class="project-card project-card--cover stack-card fade-in">
+          <div class="project-info">
+            <p class="project-path">
+              <span class="path-num">01</span>
+              <span class="path-seg">projects/</span>
+              <span class="path-file">ojas</span>
+            </p>
+            <h3>OJAS — AI Fitness &amp; Nutrition Platform</h3>
+            <p class="project-role">ML contributor · computer vision &amp; nutrition</p>
+            <p class="project-copy">
+              A fitness platform where I contributed two machine-learning pieces
+              that share a camera and answer very different questions.
+            </p>
+
+            <div class="project-contrib">
+              <div class="contrib">
+                <p class="contrib-label">// exercise analysis</p>
+                <p>
+                  MediaPipe pose landmarks, coordinate processing and vector
+                  mathematics to read body movement.
+                </p>
+              </div>
+              <div class="contrib">
+                <p class="contrib-label">// nutrition estimation</p>
+                <p>
+                  YOLOv8-based food recognition, mapped to nutrition estimates.
+                </p>
+              </div>
+            </div>
+
+            <ul class="tag-list" aria-label="OJAS technologies">
+              <li>MediaPipe</li>
+              <li>YOLOv8</li>
+              <li>Computer Vision</li>
+              <li>Vector math</li>
+              <li>RAG</li>
+            </ul>
+
+            <a
+              class="project-link"
+              href="https://ojassih.netlify.app/"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Visit OJAS <span aria-hidden="true">↗</span>
+            </a>
+          </div>
+
+          <figure class="project-media">
+            <img
+              class="project-cover"
+              src="./assets/images/ojas/logo.svg"
+              alt="OJAS logo — a gold circular mark above the OJAS wordmark on charcoal"
+              loading="lazy"
+              decoding="async"
+              width="2048"
+              height="2048"
+            />
+            <figcaption class="media-caption">ojas/logo.svg</figcaption>
+          </figure>
+        </article>
+
+        <!-- Engano: a CodeAIs project -->
+        <article class="project-card project-card--cover stack-card fade-in">
+          <div class="project-info">
+            <div class="project-tree">
+              <span class="tree-root">codeais/</span>
+              <span class="tree-elbow" aria-hidden="true">└─</span>
+              <span class="tree-current">engano/</span>
+            </div>
+
+            <h3>Engano — AI Agents</h3>
+            <p class="project-role">Team Leader · AI agent development</p>
+            <p class="project-copy">
+              Engano is a CodeAIs project: a competition entry built by a small
+              team. I led the team and worked on the agent side of the build.
+            </p>
+
+            <ul class="project-points">
+              <li>
+                Led the Engano team under CodeAIs, building AI agents and their
+                workflows.
+              </li>
+              <li>We cleared the second round and qualified for the final round.</li>
+              <li>
+                We had to forfeit the final due to personal circumstances, so we
+                never competed in it.
+              </li>
+            </ul>
+
+            <ul class="tag-list" aria-label="Engano focus">
+              <li>AI agents</li>
+              <li>Agent workflows</li>
+              <li>Team lead</li>
+              <li>Python</li>
+            </ul>
+
+            <a
+              class="project-link"
+              href="https://engano-ojas.netlify.app/"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Visit Engano <span aria-hidden="true">↗</span>
+            </a>
+          </div>
+
+          <figure class="project-media project-media--light">
+            <img
+              class="project-cover"
+              src="./assets/images/engano/game.svg"
+              alt="Engano logo — navy lettering beside a teal check mark"
+              loading="lazy"
+              decoding="async"
+              width="1024"
+              height="1024"
+            />
+            <figcaption class="media-caption">engano/logo.svg</figcaption>
+          </figure>
+        </article>
+
+        <article class="project-card stack-card fade-in">
+          <div class="project-info">
+            <p class="project-path">
+              <span class="path-num">03</span>
+              <span class="path-seg">projects/</span>
+              <span class="path-file">rag-learning</span>
+            </p>
+            <h3>RAG &amp; LLMChain</h3>
+            <p class="project-role">Exploration, not a deployed product</p>
+            <p class="project-copy">
+              Personal work with retrieval-augmented generation and LLMChain to
+              understand retrieval, prompting and chain orchestration.
+            </p>
+            <ul class="tag-list" aria-label="RAG and LLMChain focus">
+              <li>RAG</li>
+              <li>LLMChain</li>
+              <li>Retrieval</li>
+            </ul>
+          </div>
+
+          <figure class="project-media">
+            <div class="project-fallback" aria-hidden="true">
+              <span class="fallback-kicker">Personal learning</span>
+              <span class="fallback-title" data-parallax="0.04">RAG</span>
+              <span class="fallback-rule"></span>
+            </div>
+            <figcaption class="media-caption">no preview</figcaption>
+          </figure>
+        </article>
+
+      </div>
+    </section>
+
+    <!-- ========================== ACHIEVEMENTS ========================== -->
+    <section id="achievements" class="section achievements" aria-labelledby="achievements-heading">
+      <header class="section-head">
+        <p class="section-path"><span>portfolio</span><span class="sep">/</span></p>
+        <h2 class="section-folder" id="achievements-heading">achievements<span class="slash">/</span></h2>
+        <p class="section-sub reveal-lines">Chapters &amp; milestones</p>
+      </header>
+
+      <div class="chapter-ladder fade-in">
+
+        <article class="chapter">
+          <h3 class="chapter-heading">
+            <button
+              class="chapter-toggle"
+              id="chapter-1-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="chapter-1-panel"
+            >
+              <span class="chapter-num">01</span>
+              <span class="chapter-title">Internship</span>
+              <span class="chapter-hint">Epitome · ML using Python</span>
+              <span class="chapter-mark" aria-hidden="true"></span>
+            </button>
+          </h3>
+
+          <div
+            class="chapter-panel"
+            id="chapter-1-panel"
+            role="region"
+            aria-labelledby="chapter-1-toggle"
+            aria-hidden="true"
+            inert
+          >
+            <div class="chapter-panel-inner">
+              <div class="chapter-body chapter-body--split">
+                <div class="chapter-text">
+                  <p class="chapter-kicker">chapter 01 / internship</p>
+                  <h4>Machine Learning using Python</h4>
+                  <p>
+                    Completed a 120-hour summer internship in machine learning with
+                    Python at
+                    <a class="link" href="https://www.epitomegroup.in/" target="_blank" rel="noopener noreferrer">Epitome</a>
+                    — Institute for Vocational &amp; Professional Studies, July 2026.
+                  </p>
+                  <p>
+                    The work was an introduction to the practical side of ML:
+                    preparing data, training models and understanding how the
+                    pieces fit together in Python.
+                  </p>
+                </div>
+
+                <figure class="certificate-slot">
+                  <a
+                    class="certificate-file"
+                    href="./assets/certificates/internship/047c4cbf-0d47-41af-be6f-b06425991abc.png"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Open the internship certificate image in a new tab"
+                  >
+                    <img
+                      class="certificate-cover"
+                      src="./assets/certificates/internship/047c4cbf-0d47-41af-be6f-b06425991abc.png"
+                      alt="Epitome internship completion certificate awarded to Ayush Sharma"
+                      width="900"
+                      height="1273"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  </a>
+                  <figcaption class="certificate-note">
+                    <span>Internship certificate</span>
+                    <a
+                      class="certificate-open"
+                      href="./assets/certificates/internship/047c4cbf-0d47-41af-be6f-b06425991abc.png"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Open certificate <span aria-hidden="true">↗</span>
+                    </a>
+                  </figcaption>
+                </figure>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="chapter">
+          <h3 class="chapter-heading">
+            <button
+              class="chapter-toggle"
+              id="chapter-2-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="chapter-2-panel"
+            >
+              <span class="chapter-num">02</span>
+              <span class="chapter-title">Competitions</span>
+              <span class="chapter-hint">CodeAxis · Engano</span>
+              <span class="chapter-mark" aria-hidden="true"></span>
+            </button>
+          </h3>
+
+          <div
+            class="chapter-panel"
+            id="chapter-2-panel"
+            role="region"
+            aria-labelledby="chapter-2-toggle"
+            aria-hidden="true"
+            inert
+          >
+            <div class="chapter-panel-inner">
+              <div class="chapter-body chapter-body--split">
+                <div class="chapter-text">
+                  <p class="chapter-kicker">chapter 02 / competitions</p>
+                  <h4>CodeAxis — Round 2 completed</h4>
+                  <p>
+                    Certificate of completion for Round 2, 20–30 October 2026.
+                    I led Team OJAS as Team Leader through the round.
+                  </p>
+
+                  <h4 class="chapter-subhead">Engano — final round selection</h4>
+                  <p>
+                    For the Engano project under CodeAIs, our team cleared the second
+                    round and qualified for the final: I led the team. We had to
+                    forfeit participation in the final due to personal circumstances.
+                  </p>
+                </div>
+
+                <figure class="certificate-slot">
+                  <a
+                    class="certificate-file"
+                    href="./assets/certificates/competitions/Certificate.pdf"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Open the CodeAxis certificate PDF in a new tab"
+                  >
+                    <img
+                      class="certificate-cover"
+                      src="./assets/certificates/competitions/certificate-preview-1.png"
+                      alt="First page of the CodeAxis Round 2 certificate of completion awarded to Ayush Sharma"
+                      width="1400"
+                      height="1982"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  </a>
+                  <figcaption class="certificate-note">
+                    <span>CodeAxis certificate</span>
+                    <a
+                      class="certificate-open"
+                      href="./assets/certificates/competitions/Certificate.pdf"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Open certificate <span aria-hidden="true">↗</span>
+                    </a>
+                  </figcaption>
+                </figure>
+              </div>
+            </div>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ============================== FOOTER ============================== -->
+  <footer class="site-footer">
+    <p class="footer-sign">Ayush Sharma ©</p>
+    <p class="footer-note">Built with curiosity, a little code and too many tabs open.</p>
+  </footer>
+
+  <!-- Decorative pixel / web signature, bottom-right, purely atmospheric. -->
+  <img
+    class="pixel-signature"
+    src="./assets/images/pixel-signature.svg"
+    alt=""
+    aria-hidden="true"
+    loading="lazy"
+    decoding="async"
+  />
+
+  <script src="./script.js" defer></script>
+  <script src="./spiderman/script.js" defer></script>
+</body>
+</html>
