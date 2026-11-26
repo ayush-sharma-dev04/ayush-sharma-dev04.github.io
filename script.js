@@ -24,6 +24,10 @@ class AudioManager {
       uiClick: { file: 'button_click.wav', volume: 0.3, voices: 2, cooldown: 60 }
     };
 
+    this.ctx = null;
+    this.sfxGain = null;
+    this.buffers = {};
+    this.buffersLoading = false;
     this.voices = {};
     this.buildSfxPools();
 
@@ -31,6 +35,38 @@ class AudioManager {
     this.music.loop = true;
     this.music.preload = 'auto';
     this.music.volume = 0.25;
+  }
+
+  initWebAudio() {
+    if (this.ctx) return;
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    try {
+      this.ctx = new AudioCtx();
+      this.sfxGain = this.ctx.createGain();
+      this.sfxGain.gain.value = this.sfxEnabled ? 1 : 0;
+      this.sfxGain.connect(this.ctx.destination);
+      this.preloadBuffers();
+    } catch {
+      this.ctx = null;
+      this.sfxGain = null;
+    }
+  }
+
+  preloadBuffers() {
+    if (!this.ctx || this.buffersLoading) return;
+    this.buffersLoading = true;
+    Object.entries(this.sfxDefs).forEach(([key, def]) => {
+      fetch(this.basePath + def.file)
+        .then((res) => (res.ok ? res.arrayBuffer() : Promise.reject(new Error('HTTP ' + res.status))))
+        .then((buf) => this.ctx.decodeAudioData(buf))
+        .then((decoded) => {
+          this.buffers[key] = decoded;
+        })
+        .catch(() => {
+          // Fallback to HTMLAudioElement pool if fetch/decode is unavailable.
+        });
+    });
   }
 
   buildSfxPools() {
@@ -56,10 +92,22 @@ class AudioManager {
   // Called from a genuine user gesture (Start, Restart, touch, UI click).
   init() {
     this.unlocked = true;
+    if (!this.ctx) {
+      this.initWebAudio();
+    }
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
+    }
+    if (this.musicWanted && this.musicEnabled && this.music.paused) {
+      this.playMusic();
+    }
   }
 
   setSfxEnabled(on) {
     this.sfxEnabled = Boolean(on);
+    if (this.sfxGain && this.ctx) {
+      this.sfxGain.gain.setValueAtTime(this.sfxEnabled ? 1 : 0, this.ctx.currentTime);
+    }
     if (!this.sfxEnabled) {
       Object.values(this.voices).forEach((pool) => {
         pool.forEach((slot) => {
@@ -81,12 +129,29 @@ class AudioManager {
   playSfx(key) {
     if (!this.sfxEnabled || !this.unlocked) return;
     const def = this.sfxDefs[key];
-    const pool = this.voices[key];
-    if (!def || !pool) return;
+    if (!def) return;
 
     const now = performance.now();
     if (now - (this.lastPlayed[key] || -Infinity) < def.cooldown) return;
 
+    if (this.ctx && this.ctx.state === 'running' && this.buffers[key] && this.sfxGain) {
+      this.lastPlayed[key] = now;
+      try {
+        const source = this.ctx.createBufferSource();
+        const gain = this.ctx.createGain();
+        source.buffer = this.buffers[key];
+        gain.gain.value = def.volume;
+        source.connect(gain);
+        gain.connect(this.sfxGain);
+        source.start(0);
+        return;
+      } catch {
+        // Fall through to HTMLAudioElement pool.
+      }
+    }
+
+    const pool = this.voices[key];
+    if (!pool) return;
     const slot = pool.find(
       (voice) =>
         !voice.failed &&
@@ -138,7 +203,19 @@ class AudioManager {
     if (!this.musicEnabled || !this.musicWanted || !this.unlocked) return;
     try {
       const promise = this.music.play();
-      if (promise && typeof promise.catch === 'function') promise.catch(() => {});
+      if (promise && typeof promise.then === 'function') {
+        promise
+          .then(() => {
+            if (!this.musicWanted || !this.musicEnabled) {
+              this.music.pause();
+              try {
+                this.music.currentTime = 0;
+              } catch {
+              }
+            }
+          })
+          .catch(() => {});
+      }
     } catch {
       // Missing music file or autoplay refusal: play without music.
     }
@@ -1060,10 +1137,15 @@ class PortfolioGameWidget {
     this.onKeyDown = this.handleKeyDown.bind(this);
     this.onKeyUp = this.handleKeyUp.bind(this);
     this.onVisibilityChange = this.handleVisibilityChange.bind(this);
+    this.onPageHide = this.handlePageHide.bind(this);
+    this.onNavAway = this.handleNavAway.bind(this);
     this.loop = this.frameLoop.bind(this);
+    this.drawerObserver = null;
+    this.drawerSeenInView = false;
 
     this.bindUI();
     this.setupResizeObserver();
+    this.setupDrawerObserver();
     this.syncHud(true);
     this.syncAudioButtons();
   }
@@ -1117,6 +1199,18 @@ class PortfolioGameWidget {
     };
     this.stage.addEventListener('click', playUiClick);
     if (this.launcher) this.launcher.addEventListener('click', playUiClick);
+
+    const navbar = document.querySelector('.navbar');
+    if (navbar) {
+      navbar.addEventListener('click', (event) => {
+        const link = event.target.closest('a[href^="#"]');
+        if (link && this.isOpen) {
+          this.close();
+        }
+      });
+    }
+    window.addEventListener('hashchange', this.onNavAway);
+    window.addEventListener('pagehide', this.onPageHide);
   }
 
   startGame() {
@@ -1146,23 +1240,50 @@ class PortfolioGameWidget {
     if (!el) return;
 
     const press = (e) => {
-      e.preventDefault();
+      if (e.cancelable) e.preventDefault();
       this.audio.init();
       this.engine.input[controlKey] = true;
       el.classList.add('pressed');
+      if (e.pointerId !== undefined && el.setPointerCapture) {
+        try {
+          el.setPointerCapture(e.pointerId);
+        } catch {
+        }
+      }
+      if (controlKey === 'fire' && this.engine.state === 'PLAYING' && this.engine.player.fireCooldown <= 0) {
+        this.engine.firePlayerWeapon();
+      }
     };
     const release = (e) => {
-      e.preventDefault();
+      if (e && e.cancelable) e.preventDefault();
       this.engine.input[controlKey] = false;
       el.classList.remove('pressed');
     };
 
-    el.addEventListener('touchstart', press, { passive: false });
-    el.addEventListener('touchend', release, { passive: false });
-    el.addEventListener('touchcancel', release, { passive: false });
-    el.addEventListener('mousedown', press);
-    el.addEventListener('mouseup', release);
-    el.addEventListener('mouseleave', release);
+    if (window.PointerEvent) {
+      el.addEventListener('pointerdown', press);
+      el.addEventListener('pointerup', release);
+      el.addEventListener('pointercancel', release);
+      el.addEventListener('lostpointercapture', release);
+    } else {
+      el.addEventListener('touchstart', press, { passive: false });
+      el.addEventListener('touchend', release, { passive: false });
+      el.addEventListener('touchcancel', release, { passive: false });
+      el.addEventListener('mousedown', press);
+      el.addEventListener('mouseup', release);
+      el.addEventListener('mouseleave', release);
+    }
+
+    el.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' || e.code === 'Enter') {
+        press(e);
+      }
+    });
+    el.addEventListener('keyup', (e) => {
+      if (e.code === 'Space' || e.code === 'Enter') {
+        release(e);
+      }
+    });
   }
 
   setupResizeObserver() {
@@ -1183,6 +1304,26 @@ class PortfolioGameWidget {
     updateSize();
   }
 
+  setupDrawerObserver() {
+    if (!('IntersectionObserver' in window)) return;
+    this.drawerObserver = new IntersectionObserver(
+      (entries) => {
+        if (!this.isOpen) return;
+        const entry = entries[0];
+        if (entry.isIntersecting) {
+          this.drawerSeenInView = true;
+        } else if (this.drawerSeenInView) {
+          if (this.engine.state === 'PLAYING') {
+            this.engine.state = 'PAUSED';
+            this.syncOverlays();
+          }
+          this.audio.stopMusic();
+        }
+      },
+      { threshold: 0.05 }
+    );
+  }
+
   focusCanvas() {
     if (!this.canvas) return;
     try {
@@ -1195,6 +1336,8 @@ class PortfolioGameWidget {
   open() {
     if (this.isOpen) return;
     this.isOpen = true;
+    this.drawerSeenInView = false;
+    document.body.classList.remove('game-closing');
     this.drawer.classList.add('is-open');
     this.drawer.setAttribute('aria-hidden', 'false');
     this.drawer.inert = false;
@@ -1207,6 +1350,7 @@ class PortfolioGameWidget {
     window.addEventListener('keydown', this.onKeyDown, { passive: false });
     window.addEventListener('keyup', this.onKeyUp);
     document.addEventListener('visibilitychange', this.onVisibilityChange);
+    if (this.drawerObserver) this.drawerObserver.observe(this.drawer);
 
     // The launcher sits below the sticky navbar, so the drawer can be
     // off-screen when it is opened from further down the page. Bring it below
@@ -1242,7 +1386,10 @@ class PortfolioGameWidget {
     this.engine.input.left = false;
     this.engine.input.right = false;
     this.engine.input.fire = false;
-    this.audio.pauseMusic();
+    this.audio.stopMusic();
+
+    if (this.drawerObserver) this.drawerObserver.unobserve(this.drawer);
+    this.drawerSeenInView = false;
 
     this.drawer.classList.remove('is-open');
     this.drawer.setAttribute('aria-hidden', 'true');
@@ -1251,7 +1398,12 @@ class PortfolioGameWidget {
     this.toggleBtn.classList.remove('is-active');
     this.toggleBtn.title = 'Open Web Rush';
     if (this.launcher) this.launcher.classList.remove('is-active');
+    document.body.classList.add('game-closing');
     document.body.classList.remove('game-open');
+    clearTimeout(this._closeTimer);
+    this._closeTimer = setTimeout(() => {
+      if (!this.isOpen) document.body.classList.remove('game-closing');
+    }, 420);
 
     // Closing the game also dismisses the controls popover and hides the
     // information button that belongs to it.
@@ -1292,6 +1444,31 @@ class PortfolioGameWidget {
     }
   }
 
+  handlePageHide() {
+    if (this.engine.state === 'PLAYING') {
+      this.engine.state = 'PAUSED';
+      this.syncOverlays();
+    }
+    this.audio.stopMusic();
+  }
+
+  handleNavAway() {
+    if (this.isOpen) {
+      this.close();
+    } else {
+      this.audio.stopMusic();
+    }
+  }
+
+  destroy() {
+    this.close();
+    this.audio.stopMusic();
+    if (this.resizeObserver) this.resizeObserver.disconnect();
+    if (this.drawerObserver) this.drawerObserver.disconnect();
+    window.removeEventListener('hashchange', this.onNavAway);
+    window.removeEventListener('pagehide', this.onPageHide);
+  }
+
   handleKeyDown(e) {
     if (!this.isOpen) return;
     const active = document.activeElement;
@@ -1313,6 +1490,9 @@ class PortfolioGameWidget {
         this.startGame();
       } else {
         this.engine.input.fire = true;
+        if (this.engine.state === 'PLAYING' && this.engine.player.fireCooldown <= 0) {
+          this.engine.firePlayerWeapon();
+        }
       }
     }
     if (code === 'Escape') {
@@ -1565,20 +1745,20 @@ function initParallax() {
 // 6. PROJECT CARDS
 // =========================================================================
 
-// Every project card shares one pixel height on desktop, measured from the
-// tallest card so a missing screenshot can never change the stacking rhythm.
+// Equalize project card heights on desktop side-by-side layout; on mobile,
+// keep natural heights so sticky cards never extend past the viewport.
 function initProjectCardHeights() {
   const cards = Array.from(document.querySelectorAll('.project-stack .project-card'));
   if (!cards.length) return;
 
-  const isDesktop = () => window.matchMedia('(min-width: 981px)').matches;
+  const canEqualize = () => window.matchMedia('(min-width: 981px)').matches;
   let frame = null;
 
   const apply = () => {
     cards.forEach((card) => {
       card.style.height = '';
     });
-    if (!isDesktop()) return;
+    if (!canEqualize()) return;
 
     const tallest = cards.reduce((max, card) => {
       const height = card.getBoundingClientRect().height;
@@ -1599,6 +1779,50 @@ function initProjectCardHeights() {
   window.addEventListener('resize', schedule, { passive: true });
   window.addEventListener('load', schedule);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(schedule);
+}
+
+// Smooth stacked-card depth animation on both desktop and mobile.
+function initStackCards() {
+  const cards = Array.from(document.querySelectorAll('.project-stack .stack-card'));
+  if (cards.length < 2 || prefersReducedMotion()) return;
+
+  let ticking = false;
+
+  const update = () => {
+    ticking = false;
+    const isMobile = window.matchMedia('(max-width: 980px)').matches;
+    const maxShrink = isMobile ? 0.03 : 0.045;
+
+    for (let i = 0; i < cards.length - 1; i++) {
+      const card = cards[i];
+      const next = cards[i + 1];
+      const cardRect = card.getBoundingClientRect();
+      const nextRect = next.getBoundingClientRect();
+      const overlap = Math.max(0, Math.min(1, (cardRect.bottom - nextRect.top) / Math.max(180, cardRect.height)));
+
+      if (overlap > 0.01) {
+        const scale = (1 - overlap * maxShrink).toFixed(4);
+        const brightness = (1 - overlap * 0.14).toFixed(3);
+        card.classList.add('is-stacked');
+        card.style.setProperty('--stack-scale', scale);
+        card.style.setProperty('--stack-brightness', brightness);
+      } else {
+        card.classList.remove('is-stacked');
+        card.style.removeProperty('--stack-scale');
+        card.style.removeProperty('--stack-brightness');
+      }
+    }
+  };
+
+  const requestUpdate = () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(update);
+  };
+
+  window.addEventListener('scroll', requestUpdate, { passive: true });
+  window.addEventListener('resize', requestUpdate, { passive: true });
+  update();
 }
 
 // =========================================================================
@@ -1699,7 +1923,384 @@ function initGameControlsPanel() {
 }
 
 // =========================================================================
-// 9. INITIALIZATION
+// 9. ACTIVE NAV SCROLL SPY, TOASTS & HERO SCRAMBLE
+// =========================================================================
+function initActiveNav() {
+  const links = Array.from(document.querySelectorAll('.nav-links a[href^="#"]'));
+  if (!links.length) return;
+
+  const sections = links
+    .map((link) => {
+      const id = link.getAttribute('href').slice(1);
+      const section = document.getElementById(id);
+      return section ? { id, link, section } : null;
+    })
+    .filter(Boolean);
+
+  if (!sections.length) return;
+
+  const header = document.querySelector('.site-header');
+  let activeId = null;
+  let ticking = false;
+  let clickLockId = null;
+  let clickLockTimer = null;
+
+  const setCurrent = (id) => {
+    if (activeId === id) return;
+    activeId = id;
+    sections.forEach((item) => {
+      if (item.id === id) {
+        item.link.setAttribute('aria-current', 'page');
+      } else {
+        item.link.removeAttribute('aria-current');
+      }
+    });
+  };
+
+  const update = () => {
+    ticking = false;
+    const headerHeight = header ? header.getBoundingClientRect().height : 68;
+    const triggerY = headerHeight + 56;
+    const atBottom =
+      window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
+
+    let currentId = sections[0].id;
+    if (atBottom) {
+      currentId = sections[sections.length - 1].id;
+    } else {
+      for (const item of sections) {
+        const rect = item.section.getBoundingClientRect();
+        if (rect.top <= triggerY) {
+          currentId = item.id;
+        }
+      }
+    }
+
+    if (clickLockId) {
+      if (currentId === clickLockId) {
+        clickLockId = null;
+        clearTimeout(clickLockTimer);
+      } else {
+        return;
+      }
+    }
+    setCurrent(currentId);
+  };
+
+  const requestUpdate = () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(update);
+  };
+
+  links.forEach((link) => {
+    link.addEventListener('click', () => {
+      const id = link.getAttribute('href').slice(1);
+      if (id) {
+        clickLockId = id;
+        clearTimeout(clickLockTimer);
+        clickLockTimer = setTimeout(() => {
+          clickLockId = null;
+          update();
+        }, 850);
+        setCurrent(id);
+      }
+    });
+  });
+
+  window.addEventListener('scroll', requestUpdate, { passive: true });
+  window.addEventListener('resize', requestUpdate, { passive: true });
+  update();
+}
+
+let statusToastTimer = null;
+function showStatusToast(message, type = 'success') {
+  const toast = document.getElementById('status-toast');
+  if (!toast) return;
+  clearTimeout(statusToastTimer);
+  toast.textContent = message;
+  toast.classList.remove('is-success', 'is-error', 'is-visible');
+  toast.classList.add(type === 'error' ? 'is-error' : 'is-success');
+  toast.removeAttribute('hidden');
+  requestAnimationFrame(() => {
+    toast.classList.add('is-visible');
+  });
+  statusToastTimer = setTimeout(() => {
+    toast.classList.remove('is-visible');
+    setTimeout(() => {
+      toast.setAttribute('hidden', '');
+    }, 220);
+  }, 2800);
+}
+
+function initCopyEmail() {
+  const btn = document.getElementById('copy-email-btn');
+  if (!btn) return;
+  const email = btn.getAttribute('data-copy-email') || 'ayush04.sharma.codes@gmail.com';
+  let busy = false;
+
+  btn.addEventListener('click', async () => {
+    if (busy) return;
+    busy = true;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(email);
+        btn.textContent = 'Copied';
+        showStatusToast(`Copied ${email}`, 'success');
+      } else {
+        throw new Error('Clipboard API unavailable');
+      }
+    } catch {
+      showStatusToast(`Copy unavailable — ${email}`, 'error');
+    } finally {
+      setTimeout(() => {
+        btn.textContent = 'Copy email';
+        busy = false;
+      }, 1600);
+    }
+  });
+}
+
+function initCopyrightYear() {
+  const year = String(new Date().getFullYear());
+  document.querySelectorAll('[data-copyright-year]').forEach((el) => {
+    el.textContent = year;
+  });
+}
+
+function initJourneyNumbers() {
+  const cards = Array.from(document.querySelectorAll('.journey-card'));
+  const steps = Array.from(document.querySelectorAll('.journey-step[data-count-target]'));
+  const titles = Array.from(document.querySelectorAll('.journey-fill-title'));
+  if (!cards.length && !steps.length && !titles.length) return;
+
+  const parseTarget = (raw) => {
+    const str = String(raw || '').trim();
+    const match = str.match(/^([^0-9.-]*)([0-9]+(?:\.[0-9]+)?)(.*)$/);
+    if (!match) return null;
+    const [, prefix, numStr, suffix] = match;
+    const value = parseFloat(numStr);
+    const decimals = numStr.includes('.') ? numStr.split('.')[1].length : 0;
+    const minDigits = numStr.split('.')[0].length;
+    return { prefix, value, decimals, minDigits, suffix, raw: str };
+  };
+
+  const formatValue = (parsed, current) => {
+    const fixed = current.toFixed(parsed.decimals);
+    const [intPart, decPart] = fixed.split('.');
+    const paddedInt = intPart.padStart(parsed.minDigits, '0');
+    return `${parsed.prefix}${decPart !== undefined ? `${paddedInt}.${decPart}` : paddedInt}${parsed.suffix}`;
+  };
+
+  const animateStep = (step) => {
+    if (step.dataset.counted === 'true') return;
+    step.dataset.counted = 'true';
+
+    const parsed = parseTarget(step.getAttribute('data-count-target'));
+    if (!parsed) return;
+
+    if (prefersReducedMotion()) {
+      step.textContent = parsed.raw;
+      return;
+    }
+
+    step.textContent = formatValue(parsed, 0);
+    const duration = 2600;
+    const start = performance.now();
+
+    const tick = (now) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      const current = parsed.value * eased;
+      step.textContent = t >= 1 ? parsed.raw : formatValue(parsed, current);
+      if (t < 1) {
+        requestAnimationFrame(tick);
+      }
+    };
+
+    requestAnimationFrame(tick);
+  };
+
+  const fillTitle = (title) => {
+    if (title.dataset.filled === 'true') return;
+    title.dataset.filled = 'true';
+    requestAnimationFrame(() => {
+      title.classList.add('is-filled');
+    });
+  };
+
+  const trackCard = (card) => {
+    if (card.dataset.tracked === 'true') return;
+    card.dataset.tracked = 'true';
+    requestAnimationFrame(() => {
+      card.classList.add('is-tracked');
+    });
+  };
+
+  if (prefersReducedMotion() || !('IntersectionObserver' in window)) {
+    steps.forEach(animateStep);
+    titles.forEach((t) => {
+      t.dataset.filled = 'true';
+      t.classList.add('is-filled');
+    });
+    cards.forEach((c) => {
+      c.dataset.tracked = 'true';
+      c.classList.add('is-tracked');
+    });
+    return;
+  }
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        const el = entry.target;
+        if (el.classList.contains('journey-card')) {
+          trackCard(el);
+        } else if (el.classList.contains('journey-step')) {
+          animateStep(el);
+        } else if (el.classList.contains('journey-fill-title')) {
+          fillTitle(el);
+        }
+        observer.unobserve(el);
+      });
+    },
+    { threshold: 0.25 }
+  );
+
+  cards.forEach((card) => observer.observe(card));
+  steps.forEach((step) => observer.observe(step));
+  titles.forEach((title) => observer.observe(title));
+}
+
+function initHeroScramble() {
+  const el = document.querySelector('[data-scramble-words]');
+  if (!el) return;
+  const target = (el.getAttribute('data-scramble-words') || el.textContent).trim();
+  const words = target.split(/\s+/).filter(Boolean);
+  const glyphs = 'abcdefghijklmnopqrstuvwxyz0123456789';
+
+  if (!words.length || prefersReducedMotion()) {
+    el.textContent = target;
+    return;
+  }
+
+  let started = false;
+  const runSequence = () => {
+    if (started) return;
+    started = true;
+
+    const decoded = [];
+    let wordIndex = 0;
+
+    const scrambleWord = (word) =>
+      new Promise((resolve) => {
+        const duration = Math.max(150, Math.min(280, word.length * 42));
+        const start = performance.now();
+        let lastTick = 0;
+
+        const step = (now) => {
+          const progress = Math.min(1, (now - start) / duration);
+          if (now - lastTick >= 40 || progress >= 1) {
+            lastTick = now;
+            const resolvedChars = Math.floor(progress * word.length);
+            let active = '';
+            for (let i = 0; i < word.length; i++) {
+              const ch = word[i];
+              if (i < resolvedChars || progress >= 1 || /[^a-zA-Z0-9]/.test(ch)) {
+                active += ch;
+              } else {
+                const glyph = glyphs[Math.floor(Math.random() * glyphs.length)];
+                active += ch === ch.toUpperCase() ? glyph.toUpperCase() : glyph;
+              }
+            }
+            el.textContent = [...decoded, active].join(' ');
+          }
+
+          if (progress < 1) {
+            requestAnimationFrame(step);
+          } else {
+            decoded.push(word);
+            el.textContent = decoded.join(' ');
+            resolve();
+          }
+        };
+
+        requestAnimationFrame(step);
+      });
+
+    const next = async () => {
+      if (wordIndex >= words.length) {
+        el.textContent = target;
+        return;
+      }
+      await scrambleWord(words[wordIndex]);
+      wordIndex += 1;
+      if (wordIndex < words.length) {
+        setTimeout(next, 55);
+      } else {
+        el.textContent = target;
+      }
+    };
+
+    next();
+  };
+
+  if (window.__portfolioEntrancePending) {
+    window.addEventListener('portfolio:entered', runSequence, { once: true });
+  } else {
+    runSequence();
+  }
+}
+
+// =========================================================================
+// 10. UNIFIED PAGE ENTRANCE (Stage 1: fade-in -> Stage 2: Spider-Man drop)
+// =========================================================================
+function initPageEntrance() {
+  const root = document.documentElement;
+  let entered = false;
+
+  const completeEntrance = () => {
+    if (entered) return;
+    entered = true;
+    window.__portfolioEntrancePending = false;
+    window.dispatchEvent(new CustomEvent('portfolio:entered'));
+  };
+
+  if (prefersReducedMotion() || !root.classList.contains('page-loading')) {
+    root.classList.remove('page-loading');
+    completeEntrance();
+    return;
+  }
+
+  let startedFade = false;
+  const startFade = () => {
+    if (startedFade) return;
+    startedFade = true;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const onTransitionEnd = (event) => {
+          if (event.target !== document.body || event.propertyName !== 'opacity') return;
+          document.body.removeEventListener('transitionend', onTransitionEnd);
+          completeEntrance();
+        };
+        document.body.addEventListener('transitionend', onTransitionEnd);
+        setTimeout(completeEntrance, 650);
+        root.classList.remove('page-loading');
+      });
+    });
+  };
+
+  if (document.readyState === 'complete') {
+    startFade();
+  } else {
+    window.addEventListener('load', startFade, { once: true });
+    setTimeout(startFade, 350);
+  }
+}
+
+// =========================================================================
+// 10. INITIALIZATION
 // =========================================================================
 document.addEventListener('DOMContentLoaded', () => {
   window.portfolioArcade = new PortfolioGameWidget();
@@ -1707,6 +2308,13 @@ document.addEventListener('DOMContentLoaded', () => {
   initLineReveal();
   initParallax();
   initProjectCardHeights();
+  initStackCards();
+  initJourneyNumbers();
   initAchievements();
   initGameControlsPanel();
+  initActiveNav();
+  initCopyEmail();
+  initCopyrightYear();
+  initHeroScramble();
+  initPageEntrance();
 });

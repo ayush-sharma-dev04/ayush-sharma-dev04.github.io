@@ -7,7 +7,28 @@
     name="description"
     content="Ayush Sharma — computer science student exploring AI, computer vision and machine learning by building things that run."
   />
-  <title>Ayush Sharma — Software &amp; AI</title>
+  <title>Ayush Sharma — Software &amp; AI Portfolio</title>
+  <link rel="canonical" href="https://ayush-sharma-dev04.github.io/" />
+  <link rel="icon" type="image/svg+xml" href="./assets/icons/favicon.svg" />
+  <link rel="apple-touch-icon" href="./assets/images/about/profile_pic.jpeg" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Ayush Sharma" />
+  <meta property="og:title" content="Ayush Sharma — Software &amp; AI Portfolio" />
+  <meta
+    property="og:description"
+    content="Computer science student exploring AI, computer vision and machine learning by building things that run."
+  />
+  <meta property="og:url" content="https://ayush-sharma-dev04.github.io/" />
+  <meta property="og:image" content="https://ayush-sharma-dev04.github.io/assets/images/about/profile_pic.jpeg" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Ayush Sharma — Software &amp; AI Portfolio" />
+  <meta
+    name="twitter:description"
+    content="Computer science student exploring AI, computer vision and machine learning by building things that run."
+  />
+  <meta name="twitter:image" content="https://ayush-sharma-dev04.github.io/assets/images/about/profile_pic.jpeg" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -17,11 +38,30 @@
   />
   <link rel="stylesheet" href="./style.css" />
   <script>
-    document.documentElement.classList.add('js');
+    (function () {
+      var root = document.documentElement;
+      root.classList.add('js');
+      var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (!reduced) {
+        root.classList.add('page-loading');
+        window.__portfolioEntrancePending = true;
+        setTimeout(function () {
+          root.classList.remove('page-loading');
+        }, 1800);
+      }
+    })();
   </script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js" defer></script>
 </head>
 <body>
+  <div id="page-loader" class="page-loader" aria-hidden="true">
+    <div class="loader-squares">
+      <span></span>
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
+  </div>
 
   <a class="skip-link" href="#main">Skip to content</a>
 
@@ -229,7 +269,7 @@
     <section id="home" class="hero" aria-labelledby="hero-heading">
       <div class="hero-content">
         <h1 class="hero-heading" id="hero-heading">
-          Hello, Ayush Sharma<span class="cursor" aria-hidden="true"></span>
+          <span class="hero-greeting" data-scramble-words="I'm Ayush. A genius with glitches.">I'm Ayush. A genius with glitches.</span><span class="cursor" aria-hidden="true"></span>
         </h1>
 
         <p class="hero-lead">
@@ -238,11 +278,22 @@
           occasionally finding a much harder problem than I expected.
         </p>
 
-        <a class="hero-cta" href="mailto:ayush04.sharma.codes@gmail.com">
-          <span class="icon icon-email" aria-hidden="true"></span>
-          <span class="hero-cta-text">Drop me a line</span>
-          <span class="hero-cta-arrow" aria-hidden="true">↗</span>
-        </a>
+        <div class="hero-actions">
+          <a class="hero-cta" href="mailto:ayush04.sharma.codes@gmail.com">
+            <span class="icon icon-email" aria-hidden="true"></span>
+            <span class="hero-cta-text">Drop me a line</span>
+            <span class="hero-cta-arrow" aria-hidden="true">↗</span>
+          </a>
+          <button
+            id="copy-email-btn"
+            class="hero-cta-secondary"
+            type="button"
+            data-copy-email="ayush04.sharma.codes@gmail.com"
+            aria-label="Copy email address ayush04.sharma.codes@gmail.com"
+          >
+            Copy email
+          </button>
+        </div>
       </div>
 
       <!-- Transparent floating stage: the p5 canvas is drawn here. -->
@@ -309,11 +360,28 @@
         <p class="section-sub reveal-lines">Education &amp; experience</p>
       </header>
 
+      <div class="journey-ribbon" aria-hidden="true">
+        <div class="journey-ribbon-track">
+          <span>B.Tech CSE · Girijananda Chowdhury University</span>
+          <span class="ribbon-sep">/</span>
+          <span>Machine Learning using Python · Epitome</span>
+          <span class="ribbon-sep">/</span>
+          <span>120-hour summer programme · July 2026</span>
+          <span class="ribbon-sep">/</span>
+          <span>B.Tech CSE · Girijananda Chowdhury University</span>
+          <span class="ribbon-sep">/</span>
+          <span>Machine Learning using Python · Epitome</span>
+          <span class="ribbon-sep">/</span>
+          <span>120-hour summer programme · July 2026</span>
+          <span class="ribbon-sep">/</span>
+        </div>
+      </div>
+
       <div class="journey-grid">
         <article class="journey-card fade-in" tabindex="0">
           <p class="file-tab">education</p>
-          <p class="journey-step">01</p>
-          <h3>B.Tech in Computer Science and Engineering</h3>
+          <p class="journey-step" data-count-target="01">01</p>
+          <h3 class="journey-fill-title">B.Tech in Computer Science and Engineering</h3>
           <p>
             <a class="link" href="https://gcuniversity.ac.in/" target="_blank" rel="noopener noreferrer">Girijananda Chowdhury University</a>,
             Guwahati.
@@ -322,8 +390,8 @@
 
         <article class="journey-card fade-in" tabindex="0">
           <p class="file-tab">internship</p>
-          <p class="journey-step">02</p>
-          <h3>Machine Learning using Python</h3>
+          <p class="journey-step" data-count-target="02">02</p>
+          <h3 class="journey-fill-title">Machine Learning using Python</h3>
           <p>
             <a class="link" href="https://www.epitomegroup.in/" target="_blank" rel="noopener noreferrer">Epitome</a>
             — Institute for Vocational &amp; Professional Studies. A 120-hour
@@ -505,7 +573,7 @@
               <span class="fallback-title" data-parallax="0.04">RAG</span>
               <span class="fallback-rule"></span>
             </div>
-            <figcaption class="media-caption">no preview</figcaption>
+            <figcaption class="media-caption">rag-learning/notes</figcaption>
           </figure>
         </article>
 
@@ -683,9 +751,11 @@
 
   <!-- ============================== FOOTER ============================== -->
   <footer class="site-footer">
-    <p class="footer-sign">Ayush Sharma ©</p>
+    <p class="footer-sign">Ayush Sharma © <span data-copyright-year>2026</span></p>
     <p class="footer-note">Built with curiosity, a little code and too many tabs open.</p>
   </footer>
+
+  <div id="status-toast" class="status-toast" role="status" aria-live="polite" aria-atomic="true" hidden></div>
 
   <!-- Decorative pixel / web signature, bottom-right, purely atmospheric. -->
   <img

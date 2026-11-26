@@ -217,6 +217,8 @@
     // =========================================================================
     // 4. p5.js Lifecycle: setup & draw
     // =========================================================================
+    let entranceStarted = !window.__portfolioEntrancePending;
+
     function setup() {
       const container = document.getElementById('canvas-container');
       const w = container ? Math.max(320, Math.floor(container.clientWidth)) : windowWidth;
@@ -226,7 +228,17 @@
       const c = createCanvas(w, h);
       c.parent('canvas-container');
       pixelDensity(Math.min(window.devicePixelRatio || 1, 2));
-      initSimulation(true);
+
+      if (entranceStarted) {
+        initSimulation(true);
+      } else {
+        buildTopCenterCobweb();
+        window.addEventListener('portfolio:entered', () => {
+          if (entranceStarted) return;
+          entranceStarted = true;
+          initSimulation(true);
+        }, { once: true });
+      }
 
       // The stage can change size without the window resizing (for example when
       // the hero reflows), so track its box directly as well.
@@ -255,6 +267,11 @@
     function draw() {
       // Clear (rather than paint) every frame so the portfolio shows through.
       clear();
+
+      if (!entranceStarted) {
+        drawTopCenterCobweb();
+        return;
+      }
 
       // Track pointer velocity
       if (config.pointerActive) {
@@ -1041,7 +1058,7 @@
 
       // Re-seed the web when the hero switches between side-by-side and stacked
       // layouts; a plain resize keeps the current swing undisturbed.
-      if (lastStackedLayout !== null && lastStackedLayout !== stacked) {
+      if (entranceStarted && lastStackedLayout !== null && lastStackedLayout !== stacked) {
         initSimulation(true);
       } else {
         buildTopCenterCobweb();
