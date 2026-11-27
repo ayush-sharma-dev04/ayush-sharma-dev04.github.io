@@ -126,7 +126,16 @@
       aria-label="Toggle Web Rush"
       title="Open Web Rush"
     >
-      <span class="icon icon-game" aria-hidden="true"></span>
+      <span class="icon-swap" style="--swap-size: 19px" aria-hidden="true">
+        <span class="icon-swap-layer is-default">
+          <span class="icon icon-game"></span>
+        </span>
+        <span class="icon-swap-layer is-active">
+          <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+            <path d="M4 4l8 8M12 4l-8 8" />
+          </svg>
+        </span>
+      </span>
     </button>
 
     <button
@@ -138,7 +147,14 @@
       aria-label="Show Web Rush controls"
       title="Web Rush controls"
     >
-      <span aria-hidden="true">i</span>
+      <span class="icon-swap" style="--swap-size: 14px" aria-hidden="true">
+        <span class="icon-swap-layer is-default">i</span>
+        <span class="icon-swap-layer is-active">
+          <svg viewBox="0 0 14 14" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+            <path d="M3.5 3.5l7 7M10.5 3.5l-7 7" />
+          </svg>
+        </span>
+      </span>
     </button>
 
     <div
@@ -291,7 +307,20 @@
             data-copy-email="ayush04.sharma.codes@gmail.com"
             aria-label="Copy email address ayush04.sharma.codes@gmail.com"
           >
-            Copy email
+            <span class="icon-swap" style="--swap-size: 14px" aria-hidden="true">
+              <span class="icon-swap-layer is-default">
+                <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="5.5" y="5.5" width="8" height="8" rx="1.5" />
+                  <path d="M10.5 5.5V3.5a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2" />
+                </svg>
+              </span>
+              <span class="icon-swap-layer is-active">
+                <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3.5 8.5l3 3 6-6.5" />
+                </svg>
+              </span>
+            </span>
+            <span class="copy-email-label">Copy email</span>
           </button>
         </div>
       </div>
@@ -309,7 +338,7 @@
       </header>
 
       <div class="about-body">
-        <figure class="about-photo">
+        <figure class="about-photo reveal-mask">
           <img
             src="./assets/images/about/profile_pic.jpeg"
             width="1084"
@@ -378,7 +407,7 @@
       </div>
 
       <div class="journey-grid">
-        <article class="journey-card fade-in" tabindex="0">
+        <article class="journey-card fade-in">
           <p class="file-tab">education</p>
           <p class="journey-step" data-count-target="01">01</p>
           <h3 class="journey-fill-title">B.Tech in Computer Science and Engineering</h3>
@@ -388,7 +417,7 @@
           </p>
         </article>
 
-        <article class="journey-card fade-in" tabindex="0">
+        <article class="journey-card fade-in">
           <p class="file-tab">internship</p>
           <p class="journey-step" data-count-target="02">02</p>
           <h3 class="journey-fill-title">Machine Learning using Python</h3>
@@ -547,7 +576,7 @@
           </figure>
         </article>
 
-        <article class="project-card stack-card fade-in">
+        <article class="project-card project-card--cover stack-card fade-in">
           <div class="project-info">
             <p class="project-path">
               <span class="path-num">03</span>
@@ -602,7 +631,18 @@
               <span class="chapter-num">01</span>
               <span class="chapter-title">Internship</span>
               <span class="chapter-hint">Epitome · ML using Python</span>
-              <span class="chapter-mark" aria-hidden="true"></span>
+              <span class="chapter-mark icon-swap" style="--swap-size: 13px" aria-hidden="true">
+                <span class="icon-swap-layer is-default">
+                  <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                    <path d="M7 2.5v9M2.5 7h9" />
+                  </svg>
+                </span>
+                <span class="icon-swap-layer is-active">
+                  <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                    <path d="M2.5 7h9" />
+                  </svg>
+                </span>
+              </span>
             </button>
           </h3>
 
@@ -679,7 +719,18 @@
               <span class="chapter-num">02</span>
               <span class="chapter-title">Competitions</span>
               <span class="chapter-hint">CodeAxis · Engano</span>
-              <span class="chapter-mark" aria-hidden="true"></span>
+              <span class="chapter-mark icon-swap" style="--swap-size: 13px" aria-hidden="true">
+                <span class="icon-swap-layer is-default">
+                  <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                    <path d="M7 2.5v9M2.5 7h9" />
+                  </svg>
+                </span>
+                <span class="icon-swap-layer is-active">
+                  <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                    <path d="M2.5 7h9" />
+                  </svg>
+                </span>
+              </span>
             </button>
           </h3>
 

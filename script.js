@@ -35,6 +35,9 @@ class AudioManager {
     this.music.loop = true;
     this.music.preload = 'auto';
     this.music.volume = 0.25;
+    this.music.addEventListener('error', (e) => {
+      console.error('[AudioManager] Background music failed to load:', this.basePath + 'background.mp3', e);
+    });
   }
 
   initWebAudio() {
@@ -122,6 +125,9 @@ class AudioManager {
     if (!this.musicEnabled) {
       this.music.pause();
     } else {
+      // Ensure the AudioContext is live (may be suspended if no prior gesture
+      // reached audio.init() — e.g. the user toggled music before starting).
+      this.init();
       this.playMusic();
     }
   }
@@ -201,11 +207,14 @@ class AudioManager {
 
   playMusic() {
     if (!this.musicEnabled || !this.musicWanted || !this.unlocked) return;
+    // Guard: if a play() is already resolving (music is not paused), do nothing.
+    if (!this.music.paused) return;
     try {
       const promise = this.music.play();
       if (promise && typeof promise.then === 'function') {
         promise
           .then(() => {
+            // State may have changed while the promise was pending.
             if (!this.musicWanted || !this.musicEnabled) {
               this.music.pause();
               try {
@@ -214,10 +223,15 @@ class AudioManager {
               }
             }
           })
-          .catch(() => {});
+          .catch((err) => {
+            // Log the real reason so the browser console shows what failed.
+            // Common causes: autoplay policy, network error, unsupported format.
+            console.warn('[AudioManager] Background music playback failed:', err);
+          });
       }
-    } catch {
-      // Missing music file or autoplay refusal: play without music.
+    } catch (err) {
+      // Synchronous throw (very rare – e.g. element in a detached document).
+      console.warn('[AudioManager] music.play() threw synchronously:', err);
     }
   }
 
@@ -1312,6 +1326,13 @@ class PortfolioGameWidget {
         const entry = entries[0];
         if (entry.isIntersecting) {
           this.drawerSeenInView = true;
+          // Drawer has scrolled back into view while game is open.
+          // Resume music if the game was playing (not in a deliberately paused
+          // or stopped state) and music was wanted before we stopped it.
+          if (this.engine.state === 'PLAYING') {
+            this.audio.init();
+            this.audio.resumeMusic();
+          }
         } else if (this.drawerSeenInView) {
           if (this.engine.state === 'PLAYING') {
             this.engine.state = 'PAUSED';
@@ -1581,24 +1602,43 @@ const prefersReducedMotion = () =>
   window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function initFadeIn() {
-  const items = Array.from(document.querySelectorAll('.fade-in'));
+  const items = Array.from(document.querySelectorAll('.fade-in, .reveal-mask'));
   if (!items.length) return;
 
+  const markDone = (el) => {
+    el.classList.add('is-revealed-done');
+  };
+
   if (prefersReducedMotion() || !('IntersectionObserver' in window)) {
-    items.forEach((el) => el.classList.add('is-visible'));
+    items.forEach((el) => {
+      el.classList.add('is-visible');
+      markDone(el);
+    });
     return;
   }
+
+  const reveal = (el) => {
+    if (el.classList.contains('is-visible')) return;
+    el.classList.add('is-visible');
+    const onEnd = (event) => {
+      if (event.target !== el || event.propertyName !== 'clip-path') return;
+      el.removeEventListener('transitionend', onEnd);
+      markDone(el);
+    };
+    el.addEventListener('transitionend', onEnd);
+    setTimeout(() => markDone(el), 950);
+  };
 
   const observer = new IntersectionObserver(
     (entries) => {
       entries.forEach((entry) => {
         if (entry.isIntersecting) {
-          entry.target.classList.add('is-visible');
+          reveal(entry.target);
           observer.unobserve(entry.target);
         }
       });
     },
-    { threshold: 0.1, rootMargin: '0px 0px -50px 0px' }
+    { threshold: 0.1, rootMargin: '0px 0px -40px 0px' }
   );
 
   items.forEach((el) => observer.observe(el));
@@ -1829,15 +1869,19 @@ function initStackCards() {
 // 7. ACHIEVEMENT CHAPTERS
 // =========================================================================
 
-// One chapter open at a time. Closed panels are inert so their links and the
-// certificate viewer stay out of the tab order.
+// One chapter open at a time, contained in-place within .chapter-ladder.
+// Closed panels are inert so their links and the certificate viewer stay out
+// of the tab order.
 function initAchievements() {
+  const ladder = document.querySelector('.chapter-ladder');
   const toggles = Array.from(document.querySelectorAll('.chapter-toggle'));
   if (!toggles.length) return;
 
   const setOpen = (toggle, open) => {
     const panel = document.getElementById(toggle.getAttribute('aria-controls'));
+    const chapter = toggle.closest('.chapter');
     toggle.setAttribute('aria-expanded', String(open));
+    if (chapter) chapter.classList.toggle('is-open', open);
     if (!panel) return;
 
     panel.classList.toggle('is-open', open);
@@ -1849,17 +1893,37 @@ function initAchievements() {
     }
   };
 
+  const syncLadderState = () => {
+    if (!ladder) return;
+    const anyOpen = toggles.some((t) => t.getAttribute('aria-expanded') === 'true');
+    ladder.classList.toggle('has-open', anyOpen);
+    document.body.classList.toggle('chapter-open', anyOpen);
+  };
+
+  const closeAll = (restoreFocusToggle = null) => {
+    toggles.forEach((t) => setOpen(t, false));
+    syncLadderState();
+    if (restoreFocusToggle && typeof restoreFocusToggle.focus === 'function') {
+      restoreFocusToggle.focus({ preventScroll: true });
+    }
+  };
+
   toggles.forEach((toggle, index) => {
     const panel = document.getElementById(toggle.getAttribute('aria-controls'));
     if (panel) setOpen(toggle, panel.classList.contains('is-open'));
 
     toggle.addEventListener('click', () => {
-      const nextOpen = toggle.getAttribute('aria-expanded') !== 'true';
-      toggles.forEach((other) => setOpen(other, false));
-      setOpen(toggle, nextOpen);
+      const wasOpen = toggle.getAttribute('aria-expanded') === 'true';
+      toggles.forEach((t) => setOpen(t, t === toggle ? !wasOpen : false));
+      syncLadderState();
     });
 
     toggle.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && toggle.getAttribute('aria-expanded') === 'true') {
+        event.stopPropagation();
+        closeAll(toggle);
+        return;
+      }
       let nextIndex = null;
       if (event.key === 'ArrowDown') nextIndex = (index + 1) % toggles.length;
       if (event.key === 'ArrowUp') nextIndex = (index - 1 + toggles.length) % toggles.length;
@@ -1870,6 +1934,356 @@ function initAchievements() {
       event.preventDefault();
       toggles[nextIndex].focus();
     });
+  });
+
+  syncLadderState();
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    const openToggle = toggles.find((t) => t.getAttribute('aria-expanded') === 'true');
+    if (openToggle) {
+      closeAll(openToggle);
+    }
+  });
+}
+
+// =========================================================================
+// 7B. STAGED FOCUS & WEBPAGE BOUNDARY OVERSCROLL
+// =========================================================================
+
+function initProjectFocus() {
+  const stack = document.querySelector('.project-stack');
+  if (!stack) return;
+
+  const cards = Array.from(stack.querySelectorAll('.project-card'));
+  const clearTouchFocus = () => {
+    cards.forEach((c) => c.classList.remove('is-touch-focused'));
+    if (!stack.querySelector(':focus-within')) {
+      stack.classList.remove('has-focus');
+    }
+  };
+
+  stack.addEventListener('focusin', () => {
+    stack.classList.add('has-focus');
+  });
+
+  stack.addEventListener('focusout', (event) => {
+    if (!stack.contains(event.relatedTarget)) {
+      clearTouchFocus();
+    }
+  });
+
+  cards.forEach((card) => {
+    card.addEventListener('pointerdown', (event) => {
+      if (event.pointerType === 'mouse') return;
+      cards.forEach((c) => c.classList.toggle('is-touch-focused', c === card));
+      stack.classList.add('has-focus');
+    });
+  });
+
+  window.addEventListener('pointerup', clearTouchFocus, { passive: true });
+  window.addEventListener('pointercancel', clearTouchFocus, { passive: true });
+}
+
+// Elastic overscroll at the top/bottom webpage boundaries on both desktop and mobile:
+// Maximum displacement scales dynamically to ~40% of the current viewport height.
+// Never hijacks ordinary scrolling, horizontal swipes, or nested scrollables.
+function initPageOverscroll() {
+  if (prefersReducedMotion()) return;
+
+  const targets = [document.getElementById('main'), document.querySelector('.site-footer')].filter(Boolean);
+  if (!targets.length) return;
+
+  const SPRING_K = 240;
+  const SPRING_DAMPING = 22;
+
+  let accum = 0;
+  let currentOffset = 0;
+  let velocity = 0;
+  let springTimer = null;
+  let springRaf = null;
+  let dragState = null;
+  let touchState = null;
+
+  const getViewportHeight = () =>
+    window.visualViewport ? window.visualViewport.height : window.innerHeight;
+
+  const getPullParams = () => {
+    const vh = getViewportHeight();
+    const maxPull = Math.round(vh * 0.4);
+    const stiffness = Math.max(160, Math.round(vh * 0.32));
+    return {
+      maxPull,
+      stiffness,
+      clampAccum: maxPull * 16,
+    };
+  };
+
+  const setOffset = (offset) => {
+    currentOffset = offset;
+    targets.forEach((el) => {
+      el.style.transition = 'none';
+      el.style.transform = offset === 0 ? '' : `translate3d(0, ${offset.toFixed(2)}px, 0)`;
+    });
+  };
+
+  const stopSpring = () => {
+    if (springRaf !== null) {
+      cancelAnimationFrame(springRaf);
+      springRaf = null;
+    }
+  };
+
+  const resetImmediate = () => {
+    clearTimeout(springTimer);
+    stopSpring();
+    accum = 0;
+    velocity = 0;
+    dragState = null;
+    touchState = null;
+    setOffset(0);
+  };
+
+  const hasScrollableParent = (target, deltaY) => {
+    let el = target && target.nodeType === 1 ? target : null;
+    while (el && el !== document.body && el !== document.documentElement) {
+      const style = getComputedStyle(el);
+      const oy = style.overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight + 1) {
+        if (deltaY < 0 && el.scrollTop > 0) return true;
+        if (deltaY > 0 && el.scrollTop + el.clientHeight < el.scrollHeight - 1) return true;
+        return true;
+      }
+      el = el.parentElement;
+    }
+    return false;
+  };
+
+  const isInteractiveOrNested = (target) => {
+    if (!target || target.nodeType !== 1) return true;
+    if (target.closest('canvas, button, a, input, textarea, select, [role="button"]')) return true;
+    return hasScrollableParent(target, 0);
+  };
+
+  const springBack = () => {
+    clearTimeout(springTimer);
+    accum = 0;
+    if (Math.abs(currentOffset) < 0.35 && Math.abs(velocity) < 3) {
+      setOffset(0);
+      velocity = 0;
+      return;
+    }
+    stopSpring();
+    let lastTime = performance.now();
+
+    const step = (now) => {
+      const dt = Math.min(0.032, Math.max(0.001, (now - lastTime) / 1000));
+      lastTime = now;
+
+      const force = -SPRING_K * currentOffset - SPRING_DAMPING * velocity;
+      velocity += force * dt;
+      currentOffset += velocity * dt;
+
+      if (Math.abs(currentOffset) < 0.35 && Math.abs(velocity) < 3) {
+        springRaf = null;
+        velocity = 0;
+        setOffset(0);
+        return;
+      }
+
+      setOffset(currentOffset);
+      springRaf = requestAnimationFrame(step);
+    };
+
+    springRaf = requestAnimationFrame(step);
+  };
+
+  const applyPull = (deltaAccum) => {
+    stopSpring();
+    velocity = 0;
+    const { maxPull, stiffness, clampAccum } = getPullParams();
+    accum = Math.max(-clampAccum, Math.min(clampAccum, deltaAccum));
+    const damped = (maxPull * accum) / (Math.abs(accum) + stiffness);
+    setOffset(damped);
+  };
+
+  const getMaxScroll = () =>
+    Math.max(0, document.documentElement.scrollHeight - getViewportHeight());
+
+  // Desktop wheel boundary overscroll
+  window.addEventListener(
+    'wheel',
+    (event) => {
+      if (document.documentElement.classList.contains('scroll-locked')) {
+        if (currentOffset !== 0) resetImmediate();
+        return;
+      }
+      if (event.deltaY === 0 || Math.abs(event.deltaY) < Math.abs(event.deltaX)) return;
+      if (hasScrollableParent(event.target, event.deltaY)) return;
+
+      const maxScroll = getMaxScroll();
+      const atTop = window.scrollY <= 0 && event.deltaY < 0;
+      const atBottom = window.scrollY >= maxScroll - 1 && event.deltaY > 0;
+
+      if (!atTop && !atBottom) {
+        if (accum !== 0 || currentOffset !== 0) springBack();
+        return;
+      }
+
+      clearTimeout(springTimer);
+      const direction = atTop ? 1 : -1;
+      applyPull(accum + direction * Math.abs(event.deltaY) * 0.85);
+      springTimer = setTimeout(springBack, 140);
+    },
+    { passive: true }
+  );
+
+  // Mobile / touch boundary overscroll (passive start/end, conditional preventDefault on boundary move)
+  window.addEventListener(
+    'touchstart',
+    (event) => {
+      if (document.documentElement.classList.contains('scroll-locked')) return;
+      if (event.touches.length !== 1) {
+        if (touchState && touchState.active) springBack();
+        touchState = null;
+        return;
+      }
+      const touch = event.touches[0];
+      // Preserve browser edge-swipe navigation gestures
+      if (touch.clientX < 24 || touch.clientX > window.innerWidth - 24) return;
+      if (isInteractiveOrNested(event.target)) return;
+
+      touchState = {
+        target: event.target,
+        startX: touch.clientX,
+        startY: touch.clientY,
+        lastY: touch.clientY,
+        lockedAxis: null,
+        active: false,
+      };
+    },
+    { passive: true }
+  );
+
+  window.addEventListener(
+    'touchmove',
+    (event) => {
+      if (!touchState || event.touches.length !== 1) return;
+      if (document.documentElement.classList.contains('scroll-locked')) {
+        resetImmediate();
+        return;
+      }
+
+      const touch = event.touches[0];
+      const dxFromStart = touch.clientX - touchState.startX;
+      const dyFromStart = touch.clientY - touchState.startY;
+      const dy = touch.clientY - touchState.lastY;
+      touchState.lastY = touch.clientY;
+
+      if (!touchState.lockedAxis) {
+        if (Math.abs(dxFromStart) < 6 && Math.abs(dyFromStart) < 6) return;
+        touchState.lockedAxis = Math.abs(dxFromStart) >= Math.abs(dyFromStart) ? 'x' : 'y';
+      }
+      if (touchState.lockedAxis !== 'y' || dy === 0) return;
+      if (hasScrollableParent(touchState.target, -dy)) return;
+
+      const maxScroll = getMaxScroll();
+      const pullingTop = window.scrollY <= 0 && dy > 0;
+      const pullingBottom = window.scrollY >= maxScroll - 1 && dy < 0;
+
+      if (touchState.active || pullingTop || pullingBottom) {
+        const nextAccum = accum + dy * 1.4;
+        if (touchState.active && !pullingTop && !pullingBottom && Math.sign(nextAccum) !== Math.sign(accum)) {
+          touchState.active = false;
+          springBack();
+          return;
+        }
+        touchState.active = true;
+        if (event.cancelable) event.preventDefault();
+        applyPull(nextAccum);
+      }
+    },
+    { passive: false }
+  );
+
+  const endTouch = () => {
+    if (!touchState) return;
+    const wasActive = touchState.active;
+    touchState = null;
+    if (wasActive || currentOffset !== 0) springBack();
+  };
+
+  window.addEventListener('touchend', endTouch, { passive: true });
+  window.addEventListener('touchcancel', endTouch, { passive: true });
+
+  // Mouse / pen pointer drag fallback on desktop
+  window.addEventListener(
+    'pointerdown',
+    (event) => {
+      if (event.pointerType === 'touch') return;
+      if (event.button !== 0) return;
+      if (document.documentElement.classList.contains('scroll-locked')) return;
+      if (isInteractiveOrNested(event.target)) return;
+      dragState = {
+        id: event.pointerId,
+        lastY: event.clientY,
+        active: false,
+      };
+    },
+    { passive: true }
+  );
+
+  window.addEventListener(
+    'pointermove',
+    (event) => {
+      if (!dragState || event.pointerId !== dragState.id) return;
+      if (document.documentElement.classList.contains('scroll-locked')) {
+        resetImmediate();
+        return;
+      }
+      const dy = event.clientY - dragState.lastY;
+      dragState.lastY = event.clientY;
+      if (dy === 0) return;
+
+      const maxScroll = getMaxScroll();
+      const pullingTop = window.scrollY <= 0 && dy > 0;
+      const pullingBottom = window.scrollY >= maxScroll - 1 && dy < 0;
+
+      if (pullingTop || pullingBottom || dragState.active) {
+        if (!pullingTop && !pullingBottom && Math.sign(accum) !== Math.sign(dy)) {
+          const next = accum + dy * 1.1;
+          if (Math.sign(next) !== Math.sign(accum)) {
+            dragState.active = false;
+            springBack();
+            return;
+          }
+          applyPull(next);
+          return;
+        }
+        dragState.active = true;
+        applyPull(accum + dy * 1.1);
+      }
+    },
+    { passive: true }
+  );
+
+  const endDrag = () => {
+    if (!dragState) return;
+    const wasActive = dragState.active;
+    dragState = null;
+    if (wasActive || currentOffset !== 0) springBack();
+  };
+
+  window.addEventListener('pointerup', endDrag, { passive: true });
+  window.addEventListener('pointercancel', endDrag, { passive: true });
+  document.documentElement.addEventListener('pointerleave', endDrag, { passive: true });
+  window.addEventListener('resize', resetImmediate, { passive: true });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', resetImmediate, { passive: true });
+  }
+  window.addEventListener('blur', resetImmediate, { passive: true });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) resetImmediate();
   });
 }
 
@@ -2036,26 +2450,37 @@ function showStatusToast(message, type = 'success') {
 function initCopyEmail() {
   const btn = document.getElementById('copy-email-btn');
   if (!btn) return;
+  const label = btn.querySelector('.copy-email-label');
   const email = btn.getAttribute('data-copy-email') || 'ayush04.sharma.codes@gmail.com';
-  let busy = false;
+  let resetTimer = null;
+
+  const setLabel = (text) => {
+    if (label) {
+      label.textContent = text;
+    } else {
+      btn.textContent = text;
+    }
+  };
 
   btn.addEventListener('click', async () => {
-    if (busy) return;
-    busy = true;
+    clearTimeout(resetTimer);
+    btn.classList.add('is-copied');
+    setLabel('Copied');
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(email);
-        btn.textContent = 'Copied';
         showStatusToast(`Copied ${email}`, 'success');
       } else {
         throw new Error('Clipboard API unavailable');
       }
     } catch {
+      btn.classList.remove('is-copied');
+      setLabel('Copy email');
       showStatusToast(`Copy unavailable — ${email}`, 'error');
     } finally {
-      setTimeout(() => {
-        btn.textContent = 'Copy email';
-        busy = false;
+      resetTimer = setTimeout(() => {
+        btn.classList.remove('is-copied');
+        setLabel('Copy email');
       }, 1600);
     }
   });
@@ -2311,6 +2736,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initStackCards();
   initJourneyNumbers();
   initAchievements();
+  initProjectFocus();
+  initPageOverscroll();
   initGameControlsPanel();
   initActiveNav();
   initCopyEmail();

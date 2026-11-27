@@ -42,6 +42,16 @@ html {
   scroll-padding-top: calc(var(--header-h) + 20px);
   -webkit-text-size-adjust: 100%;
   overflow-x: clip;
+  overscroll-behavior-y: auto;
+}
+
+html.scroll-locked,
+html.scroll-locked body {
+  overflow-y: hidden;
+}
+
+html.scroll-locked body {
+  padding-right: var(--scrollbar-comp, 0px);
 }
 
 body {
@@ -56,6 +66,7 @@ body {
   line-height: 1.72;
   -webkit-font-smoothing: antialiased;
   overflow-x: clip;
+  overscroll-behavior-y: auto;
 }
 
 p {
@@ -155,6 +166,60 @@ ul {
 .icon-game {
   -webkit-mask-image: url("./assets/icons/game.svg");
   mask-image: url("./assets/icons/game.svg");
+}
+
+/* Crossfade icons with subtle blur that clears as the incoming icon appears. */
+.icon-swap {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: var(--swap-size, 16px);
+  height: var(--swap-size, 16px);
+  flex: 0 0 auto;
+}
+
+.icon-swap-layer {
+  grid-area: 1 / 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  transition:
+    opacity 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.icon-swap-layer.is-default {
+  opacity: 1;
+  filter: blur(0px);
+  transform: scale(1);
+}
+
+.icon-swap-layer.is-active {
+  opacity: 0;
+  filter: blur(3px);
+  transform: scale(0.86);
+  pointer-events: none;
+}
+
+.game-toggle.is-active .icon-swap-layer.is-default,
+.game-info-toggle[aria-expanded="true"] .icon-swap-layer.is-default,
+.hero-cta-secondary.is-copied .icon-swap-layer.is-default,
+.chapter-toggle[aria-expanded="true"] .icon-swap-layer.is-default {
+  opacity: 0;
+  filter: blur(3px);
+  transform: scale(0.86);
+  pointer-events: none;
+}
+
+.game-toggle.is-active .icon-swap-layer.is-active,
+.game-info-toggle[aria-expanded="true"] .icon-swap-layer.is-active,
+.hero-cta-secondary.is-copied .icon-swap-layer.is-active,
+.chapter-toggle[aria-expanded="true"] .icon-swap-layer.is-active {
+  opacity: 1;
+  filter: blur(0px);
+  transform: scale(1);
 }
 
 /* =========================================================================
@@ -883,6 +948,7 @@ body.is-grabbing * {
 .hero-cta-secondary {
   display: inline-flex;
   align-items: center;
+  gap: 8px;
   min-height: 40px;
   padding: 8px 13px;
   font-family: var(--mono);
@@ -892,13 +958,26 @@ body.is-grabbing * {
   border: 1px solid var(--line-strong);
   border-radius: 4px;
   cursor: pointer;
-  transition: color 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.18s ease, border-color 0.18s ease,
+    background-color 0.18s ease, transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .hero-cta-secondary:hover {
   color: var(--text);
   border-color: rgba(240, 235, 227, 0.34);
   background: rgba(240, 235, 227, 0.06);
+}
+
+.hero-cta-secondary:active {
+  transform: scale(0.97);
+  transition-duration: 0.07s;
+}
+
+.hero-cta-secondary.is-copied {
+  color: var(--text);
+  border-color: rgba(147, 177, 220, 0.55);
+  background: rgba(147, 177, 220, 0.1);
 }
 
 .hero-cta .icon {
@@ -1224,9 +1303,13 @@ body.game-open .pixel-signature {
   );
   border: 1px solid var(--line);
   border-radius: 12px;
-  transition: transform 0.25s ease, border-color 0.25s ease,
-    background-color 0.25s ease, box-shadow 0.25s ease;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.25s ease,
+    background-color 0.25s ease,
+    box-shadow 0.28s ease;
 }
+
+/* No fixed viewport takeover — Achievements expand in-place within .chapter-ladder */
 
 .journey-card::before {
   content: "";
@@ -1619,7 +1702,7 @@ body.game-open .pixel-signature {
   flex-direction: column;
   justify-content: flex-end;
   padding: clamp(16px, 2.4vw, 24px);
-  transition: opacity 0.3s ease;
+  transition: opacity 0.3s ease, transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .project-mark {
@@ -1670,8 +1753,16 @@ body.game-open .pixel-signature {
 
 .project-card:hover .project-cover,
 .project-card:focus-within .project-cover,
-.project-card:active .project-cover {
+.project-card:active .project-cover,
+.project-card:hover .project-fallback,
+.project-card:focus-within .project-fallback,
+.project-card:active .project-fallback {
   transform: scale(1.015);
+}
+
+.project-stack.has-focus .project-card:not(:focus-within):not(.is-touch-focused) {
+  opacity: 0.8;
+  filter: blur(0.8px);
 }
 
 /* The Engano mark is on a pale field; a soft inner shade keeps it from
@@ -1719,6 +1810,48 @@ body.game-open .pixel-signature {
 .chapter {
   position: relative;
   border-bottom: 1px solid var(--line);
+  border-radius: 12px;
+  transition: background-color 0.36s ease,
+    border-color 0.36s ease,
+    box-shadow 0.36s ease,
+    margin 0.36s cubic-bezier(0.22, 1, 0.36, 1),
+    padding 0.36s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.38s ease,
+    filter 0.38s ease;
+}
+
+.chapter.is-open {
+  margin-block: 18px;
+  padding: 6px 10px 10px;
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 20px 46px rgba(0, 0, 0, 0.3);
+}
+
+.chapter.is-open::before {
+  opacity: 0.35;
+}
+
+/* No blur or opacity reduction inside the Achievements section —
+   every card, number, icon and label stays fully sharp regardless of
+   which chapter is expanded. Only content outside the section is dimmed. */
+
+/* When any Achievement is open, blur/dim page sections (navbar stays sharp) */
+#home,
+#about,
+#journey,
+#projects,
+.site-footer {
+  transition: filter 0.4s ease, opacity 0.4s ease;
+}
+
+body.chapter-open #home,
+body.chapter-open #about,
+body.chapter-open #journey,
+body.chapter-open #projects,
+body.chapter-open .site-footer {
+  opacity: 0.6;
+  filter: blur(2.5px);
 }
 
 /* subtle ladder spine */
@@ -1773,7 +1906,8 @@ body.game-open .pixel-signature {
   background: var(--bg);
   border: 1px solid var(--line-strong);
   border-radius: 50%;
-  transition: border-color 0.2s ease, background-color 0.2s ease;
+  transition: border-color 0.2s ease, background-color 0.2s ease,
+    opacity 0.38s ease, filter 0.38s ease;
 }
 
 .chapter-toggle[aria-expanded="true"] .chapter-num {
@@ -1795,49 +1929,34 @@ body.game-open .pixel-signature {
   letter-spacing: 0.03em;
   color: var(--dim);
   white-space: nowrap;
+  transition: opacity 0.38s ease, filter 0.38s ease;
 }
 
 .chapter-mark {
   position: relative;
-  width: 11px;
-  height: 11px;
+  width: 14px;
+  height: 14px;
   justify-self: end;
   margin-right: 4px;
+  color: var(--muted);
+  transition: color 0.2s ease, opacity 0.38s ease, filter 0.38s ease;
 }
 
-.chapter-mark::before,
-.chapter-mark::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 0;
-  width: 11px;
-  height: 1px;
-  background: var(--muted);
-  transition: transform 0.25s ease, background-color 0.2s ease;
-}
-
-.chapter-mark::after {
-  transform: rotate(90deg);
-}
-
-.chapter-toggle[aria-expanded="true"] .chapter-mark::after {
-  transform: rotate(0deg);
-}
-
-.chapter-toggle[aria-expanded="true"] .chapter-mark::before,
-.chapter-toggle[aria-expanded="true"] .chapter-mark::after {
-  background: var(--accent-bright);
+.chapter-toggle[aria-expanded="true"] .chapter-mark {
+  color: var(--accent-bright);
 }
 
 .chapter-panel {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows 0.36s cubic-bezier(0.22, 1, 0.36, 1);
+  opacity: 0;
+  transition: grid-template-rows 0.46s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.36s ease;
 }
 
 .chapter-panel.is-open {
   grid-template-rows: 1fr;
+  opacity: 1;
 }
 
 .chapter-panel-inner {
@@ -1846,9 +1965,9 @@ body.game-open .pixel-signature {
 }
 
 .chapter-body {
-  max-width: 74ch;
-  margin: 0 0 30px;
-  padding: 4px 8px 24px 68px;
+  max-width: 78ch;
+  margin: 0 0 32px;
+  padding: 8px 20px 28px 68px;
   border-left: 1px solid transparent;
 }
 
@@ -2226,13 +2345,54 @@ html.page-loading body {
 .js .fade-in {
   opacity: 0;
   transform: translateY(16px);
-  transition: opacity 0.7s ease,
-    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  clip-path: inset(0 0 12% 0 round 12px);
+  transition: opacity 0.78s ease,
+    transform 0.85s cubic-bezier(0.22, 1, 0.36, 1),
+    clip-path 0.9s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .js .fade-in.is-visible {
   opacity: 1;
   transform: translateY(0);
+  clip-path: inset(0 0 0 0 round 12px);
+}
+
+.js .fade-in.is-revealed-done {
+  clip-path: none;
+  transform: none;
+}
+
+/* Mask-based reveal for photographs and project covers */
+.js .reveal-mask img {
+  clip-path: inset(100% 0 0 0 round 9px);
+  transform: scale(1.04);
+  transition: clip-path 0.95s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 1.05s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.js .reveal-mask.is-visible img {
+  clip-path: inset(0 0 0 0 round 9px);
+  transform: scale(1);
+}
+
+.js .project-card.fade-in .project-media {
+  clip-path: inset(0 0 100% 0 round 10px);
+  transition: clip-path 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.08s;
+}
+
+.js .project-card.fade-in.is-visible .project-media {
+  clip-path: inset(0 0 0 0 round 10px);
+}
+
+/* Immediate Doherty-threshold press feedback */
+.icon-link:active,
+.game-toggle:active,
+.game-info-toggle:active,
+.project-link:active,
+.chapter-toggle:active .chapter-num,
+.certificate-file:active {
+  transform: scale(0.95);
+  transition-duration: 0.07s;
 }
 
 /* Line-by-line reveal (lines are produced by script.js) */
@@ -2739,6 +2899,18 @@ html.page-loading body {
     width: 72px;
     opacity: 1;
   }
+
+  .project-card:hover .project-cover,
+  .project-card:hover .project-fallback {
+    transform: none;
+  }
+
+  .project-card:active .project-cover,
+  .project-card:focus-within .project-cover,
+  .project-card:active .project-fallback,
+  .project-card:focus-within .project-fallback {
+    transform: scale(1.015);
+  }
 }
 
 /* =========================================================================
@@ -2759,9 +2931,32 @@ html.page-loading body {
     transition: none;
   }
 
-  .js .fade-in {
+  .js .fade-in,
+  .js .reveal-mask img,
+  .js .project-card.fade-in .project-media {
     opacity: 1;
     transform: none;
+    clip-path: none;
+    transition: none;
+  }
+
+  .icon-swap-layer,
+  .chapter {
+    transition: none !important;
+    filter: none !important;
+  }
+
+  .project-stack.has-focus .project-card:not(:focus-within):not(.is-touch-focused) {
+    filter: none;
+  }
+
+  body.chapter-open #home,
+  body.chapter-open #about,
+  body.chapter-open #journey,
+  body.chapter-open #projects,
+  body.chapter-open .site-footer {
+    filter: none;
+    opacity: 1;
     transition: none;
   }
 
