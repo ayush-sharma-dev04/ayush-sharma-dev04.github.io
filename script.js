@@ -2453,6 +2453,7 @@ function initCopyEmail() {
   const label = btn.querySelector('.copy-email-label');
   const email = btn.getAttribute('data-copy-email') || 'ayush04.sharma.codes@gmail.com';
   let resetTimer = null;
+  let busy = false;
 
   const setLabel = (text) => {
     if (label) {
@@ -2462,26 +2463,50 @@ function initCopyEmail() {
     }
   };
 
+  const triggerPulse = () => {
+    // Remove and re-add the class to restart the animation if already playing.
+    btn.classList.remove('is-pulse');
+    // Force a reflow so the browser registers the removal before re-adding.
+    void btn.offsetWidth;
+    btn.classList.add('is-pulse');
+    btn.addEventListener('animationend', () => btn.classList.remove('is-pulse'), { once: true });
+  };
+
+  const reset = () => {
+    // Freeze all button-level transitions (color, background, border) so that
+    // only the icon-swap layers crossfade during the return to default state.
+    btn.classList.add('is-resetting');
+    btn.classList.remove('is-copied');
+    setLabel('Copy email');
+    busy = false;
+    // Remove the freeze after the icon transition completes (0.34s + margin).
+    setTimeout(() => btn.classList.remove('is-resetting'), 380);
+  };
+
   btn.addEventListener('click', async () => {
+    // Guard: ignore clicks while the confirmation is still showing.
+    if (busy) return;
+    busy = true;
     clearTimeout(resetTimer);
-    btn.classList.add('is-copied');
-    setLabel('Copied');
+
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(email);
+        // Success: show icon swap + pulse only after clipboard write confirmed.
+        btn.classList.add('is-copied');
+        setLabel('Copied');
+        triggerPulse();
         showStatusToast(`Copied ${email}`, 'success');
+        resetTimer = setTimeout(reset, 1800);
       } else {
         throw new Error('Clipboard API unavailable');
       }
     } catch {
+      // Failure: do not show success state; revert immediately.
       btn.classList.remove('is-copied');
       setLabel('Copy email');
+      busy = false;
       showStatusToast(`Copy unavailable — ${email}`, 'error');
-    } finally {
-      resetTimer = setTimeout(() => {
-        btn.classList.remove('is-copied');
-        setLabel('Copy email');
-      }, 1600);
     }
   });
 }

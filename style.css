@@ -980,6 +980,36 @@ body.is-grabbing * {
   background: rgba(147, 177, 220, 0.1);
 }
 
+/* During the return-to-default transition, freeze all button-level properties
+   so only the icon-swap layers crossfade — nothing else moves. */
+.hero-cta-secondary.is-resetting {
+  transition: none;
+}
+
+/* Copy-email pulse: fires once on successful copy */
+@keyframes copy-email-pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(147, 177, 220, 0);
+  }
+  30% {
+    transform: scale(1.025);
+    box-shadow: 0 0 0 5px rgba(147, 177, 220, 0.18);
+  }
+  70% {
+    transform: scale(1.01);
+    box-shadow: 0 0 0 9px rgba(147, 177, 220, 0.06);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 12px rgba(147, 177, 220, 0);
+  }
+}
+
+.hero-cta-secondary.is-pulse {
+  animation: copy-email-pulse 0.52s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
 .hero-cta .icon {
   width: 16px;
   height: 16px;
@@ -2994,6 +3024,10 @@ html.page-loading body {
   .certificate-file,
   .certificate-cover {
     transition: none;
+  }
+
+  .hero-cta-secondary.is-pulse {
+    animation: none;
   }
 
   .project-card:hover .project-cover {
